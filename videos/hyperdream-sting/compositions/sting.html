@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Sub-composition: the runtime only mounts what is inside <template>. -->
+  </head>
+  <body>
+    <template>
+    <style>
+      /* ---------- Palette (single source of truth) ---------- */
+      #sting {
+        --ink: #07070c;
+        --ink-2: #11111a;
+        --paper: #f2f0ea;
+        --violet: #7c5cff;
+        --violet-deep: #5b3df5;
+        --cyan: #3ee6ff;
+        --ember: #ff8a5c;
+        --muted: #a3a1b8;
+        --line: rgba(242, 240, 234, 0.14);
+        --sans: Inter, ui-sans-serif, system-ui, sans-serif;
+        --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        background: var(--ink);
+        font-family: var(--sans);
+        color: var(--paper);
+      }
+      :where(#sting *) { box-sizing: border-box; margin: 0; padding: 0; }
+
+      #stage { position: absolute; inset: 0; }
+      .layer { position: absolute; inset: 0; pointer-events: none; }
+
+      /* ---------- Background treatment ---------- */
+      .orb { position: absolute; border-radius: 50%; }
+      #orb-a {
+        width: 1300px; height: 1300px; left: -260px; top: -420px;
+        background: radial-gradient(circle, rgba(124, 92, 255, 0.42) 0%, rgba(124, 92, 255, 0) 62%);
+      }
+      #orb-b {
+        width: 1100px; height: 1100px; right: -300px; bottom: -480px;
+        background: radial-gradient(circle, rgba(62, 230, 255, 0.26) 0%, rgba(62, 230, 255, 0) 60%);
+      }
+      #orb-c {
+        width: 1000px; height: 1000px; left: 460px; top: 40px;
+        background: radial-gradient(circle, rgba(124, 92, 255, 0.38) 0%, rgba(62, 230, 255, 0.10) 38%, rgba(7, 7, 12, 0) 66%);
+        opacity: 0;
+      }
+      #grid {
+        background-image:
+          linear-gradient(to right, rgba(242, 240, 234, 0.05) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(242, 240, 234, 0.05) 1px, transparent 1px);
+        background-size: 120px 120px;
+        -webkit-mask-image: radial-gradient(ellipse 70% 65% at 50% 50%, #000 30%, transparent 80%);
+        mask-image: radial-gradient(ellipse 70% 65% at 50% 50%, #000 30%, transparent 80%);
+      }
+      #ghost { width: 2600px; height: 1080px; left: -120px; }
+      #grain {
+        opacity: 0.09;
+        mix-blend-mode: overlay;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+      }
+      #vignette { background: radial-gradient(ellipse 85% 80% at 50% 50%, rgba(7, 7, 12, 0) 55%, rgba(7, 7, 12, 0.85) 100%); }
+
+      /* ---------- HUD frame ---------- */
+      .hud-label {
+        position: absolute;
+        font-family: var(--mono);
+        font-size: 18px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      #hud-tl { left: 96px; top: 76px; }
+      #hud-tr { right: 96px; top: 76px; }
+      #hud-tl b { color: var(--paper); font-weight: 600; }
+      .rec-dot {
+        display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+        background: var(--ember); margin-right: 12px; vertical-align: 1px;
+      }
+      .corner { position: absolute; width: 44px; height: 44px; border-color: rgba(242, 240, 234, 0.45); border-style: solid; border-width: 0; }
+      #c-tl { left: 56px; top: 56px; border-left-width: 2px; border-top-width: 2px; transform-origin: 0 0; }
+      #c-tr { right: 56px; top: 56px; border-right-width: 2px; border-top-width: 2px; transform-origin: 100% 0; }
+      #c-bl { left: 56px; bottom: 56px; border-left-width: 2px; border-bottom-width: 2px; transform-origin: 0 100%; }
+      #c-br { right: 56px; bottom: 56px; border-right-width: 2px; border-bottom-width: 2px; transform-origin: 100% 100%; }
+
+      #rail { position: absolute; left: 96px; right: 96px; bottom: 86px; height: 2px; background: var(--line); }
+      #rail-fill {
+        position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+        background: linear-gradient(90deg, var(--violet), var(--cyan));
+        transform-origin: 0 50%;
+      }
+      .tick { position: absolute; top: -6px; width: 2px; height: 14px; background: rgba(242, 240, 234, 0.35); }
+      #tick-1 { left: 30%; }
+      #tick-2 { left: 60%; }
+
+      /* ---------- Scenes ---------- */
+      .scene { position: absolute; inset: 0; }
+      #s2, #s3 { opacity: 0; visibility: hidden; }
+
+      .mask { display: block; overflow: hidden; padding: 0.04em 0 0.1em; margin-bottom: -0.12em; }
+      .ch { display: inline-block; will-change: transform; }
+
+      /* Scene 1 — Hook */
+      #s1-content {
+        display: flex; flex-direction: column; justify-content: center;
+        width: 100%; height: 100%; padding: 120px 180px; gap: 18px;
+      }
+      #s1-kicker {
+        display: block; font-family: var(--mono); font-size: 26px;
+        letter-spacing: 0.22em; text-transform: uppercase; color: var(--cyan);
+      }
+      .hero { font-size: 210px; font-weight: 800; line-height: 1.0; letter-spacing: -0.045em; }
+      #s1-l2 .accent { color: #a891ff; }
+      #s1-underline-wrap { display: block; width: 1100px; height: 10px; }
+      #s1-underline {
+        display: block; width: 100%; height: 100%; border-radius: 6px;
+        background: linear-gradient(90deg, var(--violet), var(--cyan));
+        transform-origin: 0 50%;
+      }
+
+      /* Scene 2 — Build */
+      #s2-content {
+        display: grid; grid-template-columns: 1fr 720px; align-items: center;
+        column-gap: 70px; width: 100%; height: 100%; padding: 120px 150px;
+      }
+      #s2-words { display: flex; flex-direction: column; gap: 4px; }
+      .word { display: block; font-size: 148px; font-weight: 800; line-height: 1.04; letter-spacing: -0.04em; }
+      #w3-wrap { position: relative; display: inline-block; align-self: flex-start; padding: 0 22px; margin-left: -22px; }
+      #w3-bar {
+        position: absolute; left: 0; right: 0; top: 14%; bottom: 8%;
+        background: var(--violet-deep); border-radius: 10px; transform-origin: 0 50%;
+      }
+      #w3 { position: relative; }
+
+      #card {
+        width: 720px; padding: 34px 38px 40px; border-radius: 22px;
+        background: linear-gradient(180deg, rgba(23, 23, 36, 0.96), rgba(13, 13, 21, 0.96));
+        border: 1px solid rgba(242, 240, 234, 0.12);
+        box-shadow: 0 40px 120px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(124, 92, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        font-family: var(--mono); font-size: 21px; line-height: 1.75; color: #e6e4f0;
+      }
+      #card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+      .dot { width: 13px; height: 13px; border-radius: 50%; background: #34344a; }
+      #card-title { margin-left: 14px; font-size: 16px; letter-spacing: 0.14em; color: var(--muted); text-transform: uppercase; }
+      .code-line { display: block; white-space: pre; }
+      .k { color: #c2b3ff; }
+      .s { color: #8ff3ff; }
+      .f { color: #ffb38f; }
+      .c { color: #9896ad; }
+      #card-cursor { display: inline-block; width: 12px; height: 24px; background: var(--cyan); vertical-align: -4px; margin-left: 4px; }
+
+      /* Transitions */
+      #sweep {
+        position: absolute; top: -10%; left: 0; width: 760px; height: 120%;
+        background: linear-gradient(90deg, rgba(62, 230, 255, 0) 0%, rgba(62, 230, 255, 0.55) 45%, rgba(242, 240, 234, 0.9) 50%, rgba(124, 92, 255, 0.55) 55%, rgba(124, 92, 255, 0) 100%);
+        opacity: 0;
+      }
+      #iris-wrap { display: flex; align-items: center; justify-content: center; }
+      #iris { width: 80px; height: 80px; border-radius: 50%; background: radial-gradient(circle, #8f74ff 0%, var(--violet-deep) 70%); opacity: 0; }
+
+      /* Scene 3 — Resolve */
+      #s3-content {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        width: 100%; height: 100%; padding: 120px; gap: 0;
+      }
+      #mark { width: 170px; height: 170px; margin-bottom: 44px; }
+      #mark svg { width: 100%; height: 100%; overflow: visible; display: block; }
+      #wordmark { font-size: 176px; font-weight: 800; letter-spacing: -0.04em; line-height: 1; white-space: nowrap; }
+      #wordmark .tail { color: #a891ff; }
+      #rule-wrap { width: 960px; height: 2px; margin: 46px 0 34px; }
+      #rule { width: 100%; height: 100%; background: linear-gradient(90deg, rgba(62, 230, 255, 0), var(--cyan) 30%, var(--violet) 70%, rgba(124, 92, 255, 0)); transform-origin: 50% 50%; }
+      #tagline { display: block; font-family: var(--mono); font-size: 28px; letter-spacing: 0.34em; text-transform: uppercase; color: var(--paper); }
+      #credit { position: absolute; left: 0; right: 0; bottom: 124px; text-align: center; font-family: var(--mono); font-size: 18px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+
+      #fade-out { background: var(--ink); opacity: 0; }
+    </style>
+
+    <div id="sting" data-composition-id="sting" data-width="1920" data-height="1080">
+      <div id="stage">
+        <!-- ===== Background ===== -->
+        <div id="bg" class="layer">
+          <div id="orb-a" class="orb"></div>
+          <div id="orb-b" class="orb"></div>
+          <div id="orb-c" class="orb"></div>
+          <div id="grid" class="layer"></div>
+          <svg id="ghost" class="layer" viewBox="0 0 2600 1080" aria-hidden="true">
+            <text x="0" y="900" font-family="Inter, sans-serif" font-weight="800" font-size="760" letter-spacing="-30" fill="none" stroke="rgba(242,240,234,0.07)" stroke-width="2">DREAM</text>
+          </svg>
+        </div>
+
+        <!-- ===== Scene 1 — Hook ===== -->
+        <section id="s1" class="scene">
+          <div id="s1-content">
+            <span id="s1-kicker"><span class="split">// a ten-second experiment</span></span>
+            <span id="s1-l1" class="mask hero"><span class="split">Every frame</span></span>
+            <span id="s1-l2" class="mask hero"><span class="split">is </span><span class="split accent">code.</span></span>
+            <span id="s1-underline-wrap"><span id="s1-underline"></span></span>
+          </div>
+        </section>
+
+        <!-- ===== Scene 2 — Build ===== -->
+        <section id="s2" class="scene">
+          <div id="s2-content">
+            <div id="s2-words">
+              <span id="w1" class="word">Write it.</span>
+              <span id="w2" class="word">Render it.</span>
+              <span id="w3-wrap"><span id="w3-bar"></span><span id="w3" class="word"><span class="split">Ship it.</span></span></span>
+            </div>
+            <div id="card">
+              <div id="card-head">
+                <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                <span id="card-title">index.html</span>
+              </div>
+              <span id="cl1" class="code-line"><span class="c">// one paused timeline</span></span>
+              <span id="cl2" class="code-line"><span class="k">const</span> tl = gsap.<span class="f">timeline</span>({ paused: <span class="k">true</span> });</span>
+              <span id="cl3" class="code-line">tl.<span class="f">fromTo</span>(<span class="s">"#dream"</span>, { y: <span class="s">80</span> }, { y: <span class="s">0</span> });</span>
+              <span id="cl4" class="code-line">window.__timelines[<span class="s">"main"</span>] = tl;<span id="card-cursor"></span></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===== Scene 3 — Resolve ===== -->
+        <section id="s3" class="scene">
+          <div id="s3-content">
+            <div id="mark">
+              <svg viewBox="0 0 170 170" aria-hidden="true">
+                <defs>
+                  <linearGradient id="ring-grad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="#3ee6ff" />
+                    <stop offset="1" stop-color="#7c5cff" />
+                  </linearGradient>
+                </defs>
+                <g id="ring-g" style="transform-origin: 85px 85px">
+                  <circle id="ring" cx="85" cy="85" r="76" fill="none" stroke="url(#ring-grad)" stroke-width="4" stroke-linecap="round" stroke-dasharray="477.5" stroke-dashoffset="477.5" />
+                  <circle id="ring-dot" cx="85" cy="9" r="7" fill="#3ee6ff" />
+                </g>
+                <rect id="diamond" x="58" y="58" width="54" height="54" rx="8" fill="#7c5cff" style="transform-origin: 85px 85px" />
+              </svg>
+            </div>
+            <div id="wordmark"><span class="split">HYPER</span><span class="split tail">DREAM</span></div>
+            <div id="rule-wrap"><div id="rule"></div></div>
+            <span id="tagline"><span class="split">Motion, written in HTML</span></span>
+          </div>
+          <div id="credit">Built with HyperFrames · open source by HeyGen</div>
+        </section>
+
+        <!-- ===== Transitions ===== -->
+        <div id="sweep-layer" class="layer"><div id="sweep"></div></div>
+        <div id="iris-wrap" class="layer"><div id="iris"></div></div>
+
+        <!-- ===== HUD + finishing ===== -->
+        <div id="hud" class="layer">
+          <div id="c-tl" class="corner"></div>
+          <div id="c-tr" class="corner"></div>
+          <div id="c-bl" class="corner"></div>
+          <div id="c-br" class="corner"></div>
+          <div id="hud-tl" class="hud-label"><b>Hyperdream</b> &nbsp;/&nbsp; Nº 001</div>
+          <div id="hud-tr" class="hud-label"><span class="rec-dot"></span>1920×1080 · 30 fps · 00:10</div>
+          <div id="rail"><div id="rail-fill"></div><div id="tick-1" class="tick"></div><div id="tick-2" class="tick"></div></div>
+        </div>
+        <div id="grain" class="layer"></div>
+        <div id="vignette" class="layer"></div>
+        <div id="fade-out" class="layer"></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+      const root = document.getElementById("sting");
+
+      // ---- Deterministic char split (runs once, before the timeline is built) ----
+      function splitChars(host) {
+        host.querySelectorAll(".split").forEach((el) => {
+          const text = el.textContent;
+          el.textContent = "";
+          for (const c of text) {
+            const s = document.createElement("span");
+            s.className = "ch";
+            s.textContent = c === " " ? "\u00a0" : c;
+            el.appendChild(s);
+          }
+        });
+        return Array.from(host.querySelectorAll(".ch"));
+      }
+      const $ = (id) => root.querySelector("#" + id);
+
+      const kickerChars = splitChars($("s1-kicker"));
+      const s1Line1 = splitChars($("s1-l1"));
+      const s1Line2 = splitChars($("s1-l2"));
+      const w3Chars = splitChars($("w3"));
+      const markChars = splitChars($("wordmark"));
+      const tagChars = splitChars($("tagline"));
+
+      // Tracking collapse as per-glyph x spread (transform = sub-pixel smooth; letterSpacing would snap).
+      const spreadLeft = (px) => (i) => i * px;
+      const spreadCenter = (px, n) => (i) => (i - (n - 1) / 2) * px;
+
+      const tl = gsap.timeline({ paused: true });
+      const D = 10;
+
+      // ================= GLOBAL LAYERS (whole 10s) =================
+      tl.fromTo("#orb-a", { x: 0, y: 0 }, { x: 260, y: 140, duration: D, ease: "sine.inOut" }, 0);
+      tl.fromTo("#orb-b", { x: 0, y: 0 }, { x: -220, y: -120, duration: D, ease: "sine.inOut" }, 0);
+      tl.fromTo("#ghost", { x: 0 }, { x: -420, duration: D, ease: "none" }, 0);
+      tl.fromTo("#grid", { opacity: 0 }, { opacity: 1, duration: 1.6, ease: "sine.out" }, 0.1);
+
+      // HUD frame draws in
+      tl.fromTo(".corner", { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.7, ease: "expo.out", stagger: 0.06 }, 0.15);
+      tl.fromTo(["#hud-tl", "#hud-tr"], { opacity: 0, y: -12 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out", stagger: 0.08 }, 0.3);
+      tl.fromTo("#rail", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "sine.out" }, 0.35);
+      tl.fromTo("#rail-fill", { scaleX: 0 }, { scaleX: 1, duration: D - 0.2, ease: "none" }, 0.2);
+      tl.fromTo(".rec-dot", { opacity: 1 }, { opacity: 0.25, duration: 0.5, ease: "sine.inOut", yoyo: true, repeat: 17 }, 0.5);
+
+      // ================= SCENE 1 — HOOK (0.2 → 3.0) =================
+      tl.fromTo(kickerChars, { opacity: 0, x: spreadLeft(10) }, { opacity: 1, x: 0, duration: 1.0, ease: "power4.out", stagger: 0.008 }, 0.25);
+      tl.fromTo(s1Line1, { yPercent: 115, rotation: 6 }, { yPercent: 0, rotation: 0, duration: 0.95, ease: "expo.out", stagger: 0.028 }, 0.45);
+      tl.fromTo(s1Line2, { yPercent: 115, rotation: 6 }, { yPercent: 0, rotation: 0, duration: 0.95, ease: "expo.out", stagger: 0.034 }, 0.8);
+      tl.fromTo("#s1-underline", { scaleX: 0 }, { scaleX: 1, duration: 0.7, ease: "power3.inOut" }, 1.45);
+      // emphasis: "code." breathes in color
+      tl.fromTo("#s1-l2 .accent .ch", { color: "#a891ff" }, { color: "#8ff3ff", duration: 0.9, ease: "sine.inOut", stagger: 0.05 }, 1.6);
+      // breathe: whole block drifts left, very slowly
+      tl.fromTo("#s1-content", { x: 0 }, { x: -36, duration: 2.6, ease: "sine.inOut" }, 0.3);
+      // resolve: fast exit upward through the masks
+      tl.to(s1Line1, { yPercent: -115, duration: 0.32, ease: "power3.in", stagger: 0.012 }, 2.62);
+      tl.to(s1Line2, { yPercent: -115, duration: 0.32, ease: "power3.in", stagger: 0.012 }, 2.68);
+      tl.to(["#s1-kicker", "#s1-underline-wrap"], { opacity: 0, duration: 0.25, ease: "power2.in" }, 2.66);
+      tl.set("#s1", { autoAlpha: 0 }, 3.02);
+
+      // ================= TRANSITION 1 — light sweep (2.8 → 3.3) =================
+      tl.fromTo("#sweep", { x: -900, skewX: -18 }, { x: 2100, skewX: -18, duration: 0.55, ease: "power2.inOut" }, 2.8);
+      tl.fromTo("#sweep", { opacity: 0 }, { opacity: 1, duration: 0.12, ease: "power1.out" }, 2.8);
+      tl.to("#sweep", { opacity: 0, duration: 0.1, ease: "power1.in" }, 3.25);
+
+      // ================= SCENE 2 — BUILD (3.05 → 5.95) =================
+      tl.fromTo("#s2", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.01 }, 3.04);
+      // card arrives with perspective tilt (parallel focal point)
+      tl.fromTo("#card",
+        { x: 160, opacity: 0, rotationY: -26, transformPerspective: 1400 },
+        { x: 0, opacity: 1, rotationY: -8, transformPerspective: 1400, duration: 1.1, ease: "expo.out" }, 3.1);
+      // word 1: from left, confident
+      tl.fromTo("#w1", { x: -160, opacity: 0 }, { x: 0, opacity: 1, duration: 0.7, ease: "expo.out" }, 3.18);
+      tl.fromTo("#cl1", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 0.35, ease: "power1.inOut" }, 3.35);
+      tl.fromTo("#cl2", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 0.5, ease: "power1.inOut" }, 3.55);
+      // word 2: scale punch
+      tl.fromTo("#w2", { scale: 1.35, opacity: 0, transformOrigin: "0% 60%" }, { scale: 1, opacity: 1, duration: 0.55, ease: "back.out(1.7)" }, 3.78);
+      tl.fromTo("#cl3", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 0.5, ease: "power1.inOut" }, 3.95);
+      // word 3: tracking collapse + highlight bar wipe
+      tl.fromTo(w3Chars, { opacity: 0, x: spreadLeft(56) }, { opacity: 1, x: 0, duration: 0.8, ease: "power4.out", stagger: 0.012 }, 4.32);
+      tl.fromTo("#w3-bar", { scaleX: 0 }, { scaleX: 1, duration: 0.5, ease: "power3.inOut" }, 4.5);
+      tl.fromTo("#cl4", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 0.45, ease: "power1.inOut" }, 4.45);
+      tl.fromTo("#card-cursor", { opacity: 1 }, { opacity: 0, duration: 0.25, ease: "power1.inOut", yoyo: true, repeat: 3 }, 4.9);
+      // emphasis pulse on "Ship it."
+      tl.fromTo("#w3-wrap", { scale: 1 }, { scale: 1.05, duration: 0.18, ease: "power2.out", yoyo: true, repeat: 1, transformOrigin: "0% 50%" }, 5.05);
+      // breathe: card floats gently
+      tl.to("#card", { y: -14, rotationY: -4, duration: 1.4, ease: "sine.inOut" }, 4.2);
+      // exit: blur + push back
+      tl.to("#s2-content", { scale: 0.93, opacity: 0, filter: "blur(14px)", duration: 0.32, ease: "power2.in" }, 5.66);
+      tl.set("#s2", { autoAlpha: 0 }, 6.0);
+
+      // ================= TRANSITION 2 — iris bloom (5.75 → 6.5) =================
+      tl.fromTo("#iris", { scale: 0, opacity: 1 }, { scale: 32, opacity: 1, duration: 0.42, ease: "expo.in" }, 5.72);
+      tl.to("#iris", { opacity: 0, duration: 0.55, ease: "power2.out" }, 6.14);
+      tl.fromTo("#orb-c", { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 1.4, ease: "sine.out" }, 6.0);
+
+      // ================= SCENE 3 — RESOLVE (6.0 → 10) =================
+      tl.fromTo("#s3", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.01 }, 6.0);
+      tl.fromTo("#ring", { strokeDashoffset: 477.5 }, { strokeDashoffset: 0, duration: 1.2, ease: "power2.inOut" }, 6.15);
+      tl.fromTo("#ring-dot", { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "sine.out" }, 6.3);
+      tl.fromTo("#diamond", { scale: 0, rotation: -135 }, { scale: 1, rotation: 45, duration: 0.9, ease: "back.out(2)" }, 6.3);
+      tl.fromTo(markChars,
+        { opacity: 0, y: 46, filter: "blur(18px)" },
+        { opacity: 1, y: 0, filter: "blur(0px)", duration: 1.05, ease: "expo.out", stagger: { each: 0.045, from: "center" } }, 6.38);
+      tl.fromTo("#rule", { scaleX: 0 }, { scaleX: 1, duration: 0.9, ease: "power3.inOut" }, 7.05);
+      tl.fromTo(tagChars, { opacity: 0, x: spreadCenter(10, tagChars.length) }, { opacity: 1, x: 0, duration: 1.1, ease: "power3.out", stagger: { each: 0.012, from: "center" } }, 7.3);
+      tl.fromTo("#credit", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }, 7.7);
+      // breathe: one ambient motion — the ring orbits, everything else holds still
+      tl.fromTo("#ring-g", { rotation: 0 }, { rotation: 300, duration: 3.3, ease: "sine.inOut" }, 6.6);
+      // final dip to ink
+      tl.fromTo("#fade-out", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power1.in" }, 9.58);
+
+      window.__timelines["sting"] = tl;
+      tl.seek(0);
+      })();
+    </script>
+    </template>
+  </body>
+</html>
