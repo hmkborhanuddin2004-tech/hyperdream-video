@@ -1,39 +1,36 @@
-# 🎬 HyperDream — Interactive Cinematic Video Studio Interface
+# HyperDream - Interactive Video Studio Interface
 
-A high-performance interactive video presentation and studio playback interface built for cinematic footage, frame-by-frame metadata indexing, and dynamic video showcases.
-
----
-
-## 🌟 Key Features
-
-- 🎥 **Fluid Video Playback:** Ultra-smooth responsive player optimized for 60fps cinematic clips and product reels.
-- 🎞️ **Frame-by-Frame Indexing:** Integration with `hyperframes.json` and `meta.json` for timestamps, scene descriptions, and chapter navigation.
-- 📱 **Adaptive Viewing Modes:** Seamless switching between standard 16:9 widescreen and vertical 9:16 mobile reel formats.
-- ⚡ **Lightweight & Fast:** Zero heavy runtime overhead, vanilla web technologies with modern CSS styling and responsive layout.
+A high-performance interactive video presentation and studio playback interface built for video showcase, frame-by-frame metadata indexing, and dynamic playback.
 
 ---
 
-## 🛠️ Tech Stack
+## Features
+
+- **Fluid Video Playback:** Smooth responsive player optimized for 60fps video clips and promotional reels.
+- **Frame-by-Frame Indexing:** Integration with structured JSON schemas (`hyperframes.json`, `meta.json`) for timestamps and scene navigation.
+- **Adaptive Viewing Modes:** Switching between standard 16:9 widescreen and vertical 9:16 mobile formats.
+- **Lightweight Implementation:** Vanilla web technologies with modern CSS styling and responsive layout.
+
+---
+
+## Technical Stack
 
 - **Core:** HTML5, CSS3, Modern JavaScript (ES6+)
 - **Data Schemas:** JSON (`hyperframes.json`, `meta.json`)
-- **Media Optimization:** WebP, MP4, AV1 playback pipelines
+- **Media Pipeline:** WebP, MP4
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ```bash
 git clone https://github.com/hmkborhanuddin2004-tech/hyperdream-video.git
 cd hyperdream-video
-# Open index.html in any modern browser
+# Open index.html in any modern web browser
 ```
 
 ---
 
-## 👨‍💻 Author
+## License
 
-**HMk Borhan Uddin**  
-Full-Stack Developer · AI Automation & Meta Business Growth Specialist  
-- GitHub: [@hmkborhanuddin2004-tech](https://github.com/hmkborhanuddin2004-tech)
-- Portfolio: [hmkborhanuddin2004-tech.github.io](https://hmkborhanuddin2004-tech.github.io)
+This project is licensed under the MIT License.
